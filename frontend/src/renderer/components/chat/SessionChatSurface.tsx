@@ -26,7 +26,7 @@ import { useChatModelChoices } from "../../hooks/useChatModelChoices";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiErrorMessage } from "../../lib/api-client";
 import { forgetLaunchSettings, forgetOpeningStart, LaunchSettingsBar, launchSettingsFor, openingStartFor } from "./LaunchSettingsBar";
-import { rememberChatSettingsTemplate } from "../../lib/chat-settings-template";
+import { rememberChatSettingsTemplate, rememberChatSkills } from "../../lib/chat-settings-template";
 import { useSwitchAgentState } from "../../hooks/useSwitchAgent";
 import {
 	useConversation,
@@ -411,6 +411,12 @@ export const SessionChatSurface = memo(function SessionChatSurface({
 		Boolean(controllerCatalogsEnabled && catalogsEnabled && snapshot),
 		hostId,
 	);
+	// A new chat of this agent offers these "/" skills before its own session runs.
+	const skillsHarness = snapshot?.harness;
+	useEffect(() => {
+		if (session.kind !== "worker" || !skillsHarness || skills.length === 0) return;
+		rememberChatSkills(skillsHarness, hostId, skills);
+	}, [hostId, session.kind, skills, skillsHarness]);
 	const { paths, truncated } = useWorkspaceFilePaths(session.id, Boolean(snapshot), hostId);
 	const stageAttachments = useStageAttachments(session.id, hostId);
 	const [annotationNavigationRequest, setAnnotationNavigationRequest] = useState<{ id: string; text: string; messageId?: string; revision?: number }>();
