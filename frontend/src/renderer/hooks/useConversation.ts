@@ -671,7 +671,7 @@ export function useConversationCommands(sessionId: string | undefined, hostId?: 
 				},
 			);
 			if (error)
-				throw new Error(apiErrorMessage(error, `Failed to resume agent (${response.status})`));
+				throw Object.assign(new Error(apiErrorMessage(error, `Failed to resume agent (${response.status})`)), { code: apiErrorCode(error) });
 			return data;
 		},
 		onSuccess: () => {
@@ -1022,6 +1022,7 @@ export function useConversationCommands(sessionId: string | undefined, hostId?: 
 		resumeAgent: () => resume.mutateAsync(),
 		resumingAgent,
 		resumeError: resume.error ? apiErrorMessage(resume.error) : undefined,
+		resumeErrorCode: resume.error ? apiErrorCode(resume.error) : undefined,
 		compact: () => compact.mutateAsync(),
 		choosingSettings: chooseSettings.isPending && chooseSettings.variables?.targetSessionId === sessionId,
 		chooseSettings: (settings: TurnSettings) => chooseSettings.mutate({ targetSessionId: sessionId as string, settings }),
