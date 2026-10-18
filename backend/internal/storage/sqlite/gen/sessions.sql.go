@@ -2051,7 +2051,7 @@ UPDATE sessions SET
     cleanup_generation = ?, browser_capability_verifier = ?,
     provider_conversation_id = ?, controller_generation = ?, model = ?, effort = ?, updated_at = ?,
     is_pinned = ?, pinned_at = ?, auto_inject_review = ?, auto_inject_ci = ?,
-    automation_launch_completed = ?, import_source = ?
+    automation_launch_completed = ?
 WHERE id = ?
 `
 
@@ -2104,7 +2104,6 @@ type UpdateSessionParams struct {
 	AutoInjectReview                 bool
 	AutoInjectCI                     bool
 	AutomationLaunchCompleted        bool
-	ImportSource                     string
 	ID                               domain.SessionID
 }
 
@@ -2158,7 +2157,6 @@ func (q *Queries) UpdateSession(ctx context.Context, arg UpdateSessionParams) er
 		arg.AutoInjectReview,
 		arg.AutoInjectCI,
 		arg.AutomationLaunchCompleted,
-		arg.ImportSource,
 		arg.ID,
 	)
 	return err

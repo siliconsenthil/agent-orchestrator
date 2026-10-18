@@ -1942,6 +1942,12 @@ func (m *Manager) refreshDefaultBranchesBestEffort(ctx context.Context, project 
 }
 
 func (m *Manager) createSessionWorkspace(ctx context.Context, project domain.ProjectRecord, cfg ports.SpawnConfig, id domain.SessionID, branch string, baseRefs map[string]string) (ports.WorkspaceInfo, *ports.WorkspaceProjectInfo, error) {
+	return m.createSessionWorkspaceAt(ctx, project, cfg, id, branch, baseRefs, "")
+}
+
+// createSessionWorkspaceAt starts a workspace project's root at startRef when
+// set; session import uses it to continue from the original commit.
+func (m *Manager) createSessionWorkspaceAt(ctx context.Context, project domain.ProjectRecord, cfg ports.SpawnConfig, id domain.SessionID, branch string, baseRefs map[string]string, startRef string) (ports.WorkspaceInfo, *ports.WorkspaceProjectInfo, error) {
 	projectKind := project.Kind.WithDefault()
 	if cfg.ProjectID == "" {
 		projectKind = domain.ProjectKindScratch
@@ -2013,6 +2019,7 @@ func (m *Manager) createSessionWorkspace(ctx context.Context, project domain.Pro
 		RootRepoPath:  project.Path,
 		BaseBranch:    project.Config.WorktreeBaseBranch(),
 		BaseRef:       baseRefs[filepath.Clean(project.Path)],
+		StartRef:      startRef,
 		Repos:         childRepos,
 		Assets:        assets,
 	})
