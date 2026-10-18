@@ -1764,6 +1764,7 @@ function ChatWorkspaceContent({
 									onResume={newWorkDisabled ? undefined : onResumeAgent}
 									resuming={resumingAgent}
 									resumeError={resumeError}
+									harness={snapshot.harness}
 									onOpenShell={onOpenShell}
 									openingShell={openingShell}
 									shellError={shellError}
@@ -1860,6 +1861,7 @@ function ChatWorkspaceContent({
 										showSteerButton={showSteerButton}
 										canSteer={Boolean(onSteer) && turn?.state === "running"}
 										sendPending={sendPending || agentResuming}
+										waitingForAgent={agentResuming}
 										steerPending={steerPending}
 										steerRefusal={steerRefusal}
 										onCompact={newWorkDisabled || snapshot.controller.state === "hibernated" ? undefined : onCompact}
@@ -2257,6 +2259,8 @@ function ChatHeader({
 	return inline ? header : <SessionTopbarPortal>{header}</SessionTopbarPortal>;
 }
 
+const OPEN_ELSEWHERE_RECHECK_MS = 30_000;
+
 /**
  * Controller health and hibernation. A silent surface is indistinguishable from
  * an agent that is simply thinking.
@@ -2270,6 +2274,7 @@ function ControllerBanner({
 	onResume,
 	resuming,
 	resumeError,
+	harness,
 	onOpenShell,
 	openingShell,
 	shellError,
@@ -2282,10 +2287,23 @@ function ControllerBanner({
 	onResume?: () => void | Promise<unknown>;
 	resuming?: boolean;
 	resumeError?: string;
+	harness?: string;
 	onOpenShell?: () => void;
 	openingShell?: boolean;
 	shellError?: string;
 }) {
+	const openElsewhere = resumeError?.toLowerCase().includes("this is open elsewhere") ?? false;
+	// The other app releases the chat without telling AO (Codex can hold a closed
+	// one for many minutes), so keep checking instead of waiting for Retry.
+	const resumeRef = useRef(onResume);
+	resumeRef.current = onResume;
+	useEffect(() => {
+		if (!openElsewhere || resuming) return;
+		const timer = window.setTimeout(() => {
+			void Promise.resolve().then(() => resumeRef.current?.()).catch(() => {});
+		}, OPEN_ELSEWHERE_RECHECK_MS);
+		return () => window.clearTimeout(timer);
+	}, [openElsewhere, resuming]);
 	// Startup failures use the checklist's Retry action.
 	if (provisionState === "provisioning" || provisionState === "failed") return null;
 	const waking = Boolean(resuming && controller.state === "stopped");
@@ -2299,7 +2317,6 @@ function ControllerBanner({
 	if (controller.state === "ready" || controller.state === "busy" || controller.state === "hibernated") return null;
 	if (controller.state === "stopped" && (transitioning || automaticWakePending)) return null;
 
-	const openElsewhere = resumeError?.toLowerCase().includes("this is open elsewhere") ?? false;
 	const copy: Partial<Record<ControllerState, { title: string; tone: string }>> = {
 		connecting: {
 			title: "Connecting to the agent…",
@@ -2342,7 +2359,9 @@ function ControllerBanner({
 				{controller.state === "stopped" && !waking ? (
 					<>
 						<span className="text-xs leading-snug text-muted-foreground">
-							{openElsewhere ? "Close it there to continue here." : needsResume ? "Retry to continue this conversation." : "History is kept. Resume the agent or open a shell in the same worktree."}
+							{openElsewhere
+								? `Close it there to continue here.${harness === "codex" ? " Codex can keep a closed chat for a while." : ""} AO checks again every 30 seconds.`
+								: needsResume ? "Retry to continue this conversation." : "History is kept. Resume the agent or open a shell in the same worktree."}
 						</span>
 						{!openElsewhere && (resumeError || shellError) ? (
 							<span className="text-xs leading-snug text-destructive">
