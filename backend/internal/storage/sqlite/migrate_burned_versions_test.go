@@ -211,6 +211,7 @@ var shippedMigrations = map[int64]string{
 	213: "0213_session_stale_binary.sql",
 	214: "0214_app_settings_version_refresh.sql",
 	215: "0215_session_harness_releases.sql",
+	// IDs from here on are UTC timestamps from `npm run migration:create`.
 	20261020083219744: "20261020083219744_session_import.sql",
 }
 
