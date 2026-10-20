@@ -24,7 +24,9 @@ import { useObservedAgentSwitchLifecycle } from "../../hooks/useObservedAgentSwi
 import { useAgentSwitchPresentationVisibility, useAgentSwitchRouteVisibility } from "../../hooks/useAgentSwitchVisibility";
 import { useChatModelChoices } from "../../hooks/useChatModelChoices";
 import { useSwitchAgentState } from "../../hooks/useSwitchAgent";
+import { useQueryClient } from "@tanstack/react-query";
 import {
+	conversationQueryKey,
 	useConversation,
 	useConversationCommands,
 	useConversationConfigOptions,
@@ -214,6 +216,19 @@ export const SessionChatSurface = memo(function SessionChatSurface({
 	// boundary that decides whether switching to Terminal needs user consent.
 	const snapshot = queriedSnapshot?.sessionId === session.id ? queriedSnapshot : undefined;
 	const commands = useConversationCommands(session.id, hostId);
+	// After a daemon restart the daemon reattaches surviving Chats on its own, and
+	// that reattach emits no change event. The session's recovery check settling
+	// on "ready" is the signal to refresh the controller state this view shows.
+	const queryClient = useQueryClient();
+	const statusReadiness = session.statusReadiness;
+	const lastReadiness = useRef({ id: session.id, readiness: statusReadiness });
+	useEffect(() => {
+		const previous = lastReadiness.current;
+		lastReadiness.current = { id: session.id, readiness: statusReadiness };
+		if (hostId || previous.id !== session.id || statusReadiness !== "ready" ||
+			!previous.readiness || previous.readiness === "ready") return;
+		void queryClient.invalidateQueries({ queryKey: conversationQueryKey(session.id) });
+	}, [hostId, queryClient, session.id, statusReadiness]);
 	const projectPermissions = useRememberProjectPermissions(session.workspaceId, snapshot?.harness, hostId);
 	const {
 		acknowledgeAcceptedTurn,
