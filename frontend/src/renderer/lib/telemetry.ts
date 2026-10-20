@@ -94,7 +94,7 @@ export function reserveUpdateFailure(
 	properties: TelemetryProperties,
 	now = Date.now(),
 ): boolean {
-	const key = [properties.phase, properties.error_category, properties.to_version ?? ""].join("|");
+	const key = updateFailureKey(properties);
 	try {
 		const parsed = JSON.parse(storage.getItem(UPDATE_FAILURE_STORAGE_KEY) ?? "{}") as Record<string, unknown>;
 		const recent = Object.entries(parsed)
@@ -107,6 +107,22 @@ export function reserveUpdateFailure(
 		return true;
 	} catch {
 		return true;
+	}
+}
+
+function updateFailureKey(properties: TelemetryProperties): string {
+	return [properties.phase, properties.error_category, properties.to_version ?? ""].join("|");
+}
+
+function releaseUpdateFailure(storage: DailyActiveStorage, properties: TelemetryProperties, reservedAt: number): void {
+	try {
+		const parsed = JSON.parse(storage.getItem(UPDATE_FAILURE_STORAGE_KEY) ?? "{}") as Record<string, unknown>;
+		const key = updateFailureKey(properties);
+		if (parsed[key] !== reservedAt) return;
+		delete parsed[key];
+		storage.setItem(UPDATE_FAILURE_STORAGE_KEY, JSON.stringify(parsed));
+	} catch {
+		// A storage failure cannot affect the updater.
 	}
 }
 
@@ -1050,12 +1066,27 @@ export async function captureRendererEvent(event: string, properties?: Record<st
 	}
 	if (!(await initTelemetry())) return false;
 	const storage = telemetryStorage();
-	if (storage && event === "ao.renderer.update_failed" && !reserveUpdateFailure(storage, sanitizedProperties)) return false;
-	if (event === "ao.renderer.update_failed" && !reserveCapture(event)) return false;
+	let updateFailureReservedAt: number | undefined;
+	if (event === "ao.renderer.update_failed") {
+		if (!reserveCapture(event)) return false;
+		if (storage) {
+			const now = Date.now();
+			if (!reserveUpdateFailure(storage, sanitizedProperties, now)) return false;
+			updateFailureReservedAt = now;
+		}
+	}
 	if (storage && event === "ao.renderer.update_downloaded") clearUpdateFailures(storage, sanitizedProperties.to_version);
 	const safeProperties = withTelemetryContext(sanitizedProperties);
 	if (event === "ao.renderer.api_error") safeProperties.sample_rate = API_ERROR_SAMPLE_RATE;
-	return Boolean(posthog.capture(postHogEventName(event), safeProperties));
+	let captured = false;
+	try {
+		captured = Boolean(posthog.capture(postHogEventName(event), safeProperties));
+		return captured;
+	} finally {
+		if (!captured && storage && updateFailureReservedAt !== undefined) {
+			releaseUpdateFailure(storage, sanitizedProperties, updateFailureReservedAt);
+		}
+	}
 }
 
 export async function captureRendererException(error: unknown, properties?: Record<string, unknown>): Promise<void> {
