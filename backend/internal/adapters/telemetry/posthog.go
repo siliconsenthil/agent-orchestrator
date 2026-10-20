@@ -37,6 +37,16 @@ var remoteEventNameAliases = map[string]string{
 	"ao.renderer.daemon_failure": "ao.v2.renderer.daemon_failure",
 }
 
+// The remote product sink accepts only AO's event namespace. Local telemetry
+// remains unrestricted for diagnostics. SDK identity operations do not pass
+// through this sink.
+func isProductionTelemetryName(name string) bool {
+	if !strings.HasPrefix(name, "ao.") || name == "ao.unset_test" {
+		return false
+	}
+	return !strings.HasSuffix(name, ".heartbeat_stale") && !strings.HasSuffix(name, ".nudged")
+}
+
 var remoteCommandTokens = map[string]struct{}{
 	"add":              {},
 	"agent":            {},
@@ -115,6 +125,7 @@ var remotePayloadAllowlist = map[string]map[string]struct{}{
 		// existing - the true occurrence count of a burst - is silently
 		// stripped before it ever reaches PostHog.
 		"count":        {},
+		"sample_rate":  {},
 		"window_start": {},
 		"window_end":   {},
 	},
@@ -148,6 +159,7 @@ var remotePayloadAllowlist = map[string]map[string]struct{}{
 		"browser_command":    {},
 		"runtime_link_state": {},
 		"count":              {},
+		"sample_rate":        {},
 		"window_start":       {},
 		"window_end":         {},
 	},
@@ -308,6 +320,9 @@ func NewPostHogSink(dataDir, apiKey, host, appVersion, defaultAgent string, clie
 
 // Emit enqueues an event for best-effort export.
 func (s *PostHogSink) Emit(_ context.Context, ev ports.TelemetryEvent) {
+	if !isProductionTelemetryName(ev.Name) {
+		return
+	}
 	s.queueMu.RLock()
 	if s.closed {
 		s.queueMu.RUnlock()
